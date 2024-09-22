@@ -1,5 +1,6 @@
 package com.mobilitus.attractionscmd.preparecountry;
 
+import com.mobilitus.attractionscmd.bandsintown.BandsInTownWorker;
 import com.mobilitus.attractionscmd.spotify.Spotify;
 import com.mobilitus.attractionscmd.spotify.internal.model_objects.specification.Artist;
 import com.mobilitus.attractionscmd.spotify.internal.model_objects.specification.ExternalUrl;
@@ -18,6 +19,7 @@ import com.mobilitus.util.data.attractions.AttractionType;
 import com.mobilitus.util.data.attractions.DataSource;
 import com.mobilitus.util.data.attractions.GenreData;
 import com.mobilitus.util.data.attractions.PerformerType;
+import com.mobilitus.util.data.attractions.VenueData;
 import com.mobilitus.util.data.attractions.textHandler.TagCounter;
 import com.mobilitus.util.data.aws.cloudsearch.GogoEventSearchData;
 import com.mobilitus.util.data.aws.cloudsearch.GogoSearchData;
@@ -71,14 +73,14 @@ public class PrepareCountry
     private ArtistWorker artistWorker;
 
     private Map<String, String> artistMap = new HashMap<>(60000);
-
+    private BandsInTownWorker bandsInTownWorker;
 
     private static ElastiCacheAdministrator cacheAdministrator;
 //    private BandsInTownScraper bandsInTown = new BandsInTownScraper();
 //    private SongkickScraper songKick = new SongkickScraper();
 
 
-    public PrepareCountry()
+    public PrepareCountry(String scrapingbeeApiKey)
     {
         AwsCredentialsProvider credentialsProvider = AWSUtils.getCredentialsProvider();
 
@@ -96,11 +98,9 @@ public class PrepareCountry
         eventWorker = new EventWorker(null, null, mapper, AWSUtils.getS3(), searchConfig);
         artistWorker = new ArtistWorker(null, null, mapper, AWSUtils.getS3(), searchConfig);
         venueWorker = new VenueWorker(id, new FaceData(), mapper, s3, searchConfig);
-        artistWorker = new ArtistWorker(id, new FaceData(), mapper, s3, searchConfig);
-        eventWorker = new EventWorker(id, new FaceData(), mapper, s3, searchConfig);
 
         cacheAdministrator = new ElastiCacheAdministrator();
-
+        bandsInTownWorker = new BandsInTownWorker (scrapingbeeApiKey);
         spotify = new Spotify();
 
     }
@@ -145,12 +145,13 @@ public class PrepareCountry
         return artists;
     }
 
+
     public Page<ArtistData> getArtistsImpl(String country, String offset, Integer limit)
     {
         SearchAttractionFilter filter = new SearchAttractionFilter();
         filter.setSort(EventSort.name, SortOrder.asc);
         filter.addLocation(null, null, country);
-//        filter.setAttractionType(AttractionType.music);
+        //        filter.setAttractionType(AttractionType.music);
         filter.searchArtists(true);
         List<ArtistData> artists = new ArrayList<>();
         String name = "";
@@ -166,15 +167,16 @@ public class PrepareCountry
             }
             name = artist.getName();
 
-//            if (artist.getMajorType() != AttractionType.music)
-//            {
-//                continue;
-//            }
+            //            if (artist.getMajorType() != AttractionType.music)
+            //            {
+            //                continue;
+            //            }
             artists.add(artist);
         }
 
         return new Page(artists).withPagination(result.getPagination());
     }
+
 
 
     public List<ArtistData> listUpcomingArtistsAbroad(String country)
@@ -261,6 +263,80 @@ public class PrepareCountry
 
         return result;
     }
+
+    public List<VenueData> getVenues(String country)
+    {
+        List<VenueData> venues = new ArrayList<>();
+        String offset = null;
+        Integer limit = 100;
+        Boolean done = false;
+        String last = null;
+        int totalUpcoming = 0;
+        int total = 0;
+        int active = 0;
+
+        int i = 0;
+        while (!done)
+        {
+            Page<VenueData> p = getVenuesImpl(country, offset, limit);
+            //            venues.addAll(p.getList());
+            for (VenueData venue : p.getList())
+            {
+                System.out.println(i + "/" + p.getTotalSize() + " " + venue.getName() + "\t" +  venue.getMajorCategory() + " " + venue.getCapacity() + "\t" +
+                                   venue.getUpcoming() + "/" + venue.getAll() + "\t\t\t https://devbackstage.promogogo.com/venue" + venue.getLocationID() + " " + venue.getCreated());
+
+                venues.add(venue);
+                totalUpcoming += venue.getUpcoming();
+                total += venue.getAll();
+                if (venue.getAll() > 0)
+                {
+                    active++;
+                }
+                i++;
+            }
+            offset = p.getNextOffset();
+            if (offset == null)
+            {
+                done = true;
+            }
+        }
+        System.out.println("Found " + venues.size() + " venues with " + totalUpcoming + " upcoming events out of " + total + " total events. " + active + " active venues");
+        return venues;
+    }
+
+
+
+    public Page<VenueData> getVenuesImpl(String country, String offset, Integer limit)
+    {
+        SearchAttractionFilter filter = new SearchAttractionFilter();
+        filter.setSort(EventSort.name, SortOrder.asc);
+        filter.addLocation(null, null, country);
+        //        filter.setAttractionType(AttractionType.music);
+        filter.searchVenues(true);
+        List<VenueData> venues = new ArrayList<>();
+        String name = "";
+        Page<GogoSearchData> result = gogoSearch.findByName("", filter, offset, limit);
+        for (GogoSearchData searchData : result)
+        {
+            VenueData venue = venueWorker.getVenue(searchData.getId());
+
+            if (venue.getName().equalsIgnoreCase(name))
+            {
+                System.out.println("Found " + venue.getName() +  " with same name as previous venue  https://dashboard.promogogo.com/go/editvenue.do#!/venue/" + venue.getLocationID());
+                System.out.println("");
+            }
+            name = venue.getName();
+
+            //            if (venue.getMajorType() != AttractionType.music)
+            //            {
+            //                continue;
+            //            }
+            venues.add(venue);
+        }
+
+        return new Page(venues).withPagination(result.getPagination());
+    }
+
 
     private void clearEventsWithWrongArtistTag(List<ArtistData> artists, String country)
     {
@@ -524,6 +600,92 @@ public class PrepareCountry
 
     }
 
+    public void updateArtistsFromBandsInTown(String country)
+    {
+
+        Map<String, ArtistData> bitMap = new HashMap<>(1000);
+        String offset = null;
+        Integer limit = 10;
+        Boolean done = false;
+        int skip = 0;
+        int i = 0;
+        int hasArtist = 0;
+        int added = 0;
+        while (!done)
+        {
+            Page<ArtistData> artists = getArtistsImpl(country, offset, limit);
+
+            for (ArtistData artist : artists)
+            {
+                i++;
+                if (i < skip)
+                {
+                    continue;
+                }
+                if (bandsInTownWorker.hasBandsInTownArtist(artist))
+                {
+                    logger.info(hasArtist + "/" + i + "/" + artists.getTotalSize() + "  " + artist.getName() +   " has  bandsintown" + "   https://dashboard.promogogo.com/go/adminartists.do#!/artist/" + artist.getArtistID());
+                    hasArtist++;
+                }
+                else
+                {
+                    logger.info( "   " + i + "/" + artists.getTotalSize() + "  " + artist.getName() + " does not have bandsintown" + "   https://dashboard.promogogo.com/go/adminartists.do#!/artist/" + artist.getArtistID());
+                }
+
+                Boolean bAdded = bandsInTownWorker.scrapeArtist(artist);
+                if (bAdded)
+                {
+                    added++;
+                }
+            }
+            offset = artists.getNextOffset();
+            if (offset == null)
+            {
+                done = true;
+            }
+        }
+        logger.info ("found " + hasArtist + " added " + added);
+    }
+
+    public void updateVenueFromBandsInTown(String country)
+    {
+
+//        String offset = null;
+//        Integer limit = 50;
+//        Boolean done = false;
+//        int skip = 0;
+//        int i = 0;
+//        while (!done)
+//        {
+//            Page<VenueData> venues = getVenueImpl(country, offset, limit);
+//
+//            for (VenueData venue : venues)
+//            {
+//                i++;
+//                if (i < skip)
+//                {
+//                    continue;
+//                }
+//                if (venue.getSourceValue(DataSource.bandsInTown)  != null && !venue.getSourceValue(DataSource.bandsInTown).isEmpty())
+//                {
+//                    logger.info(i + "/" + venues.getTotalSize() + "  " + venue.getName() + " " + venue.getSourceValue(DataSource.bandsInTown) + "   https://dashboard.promogogo.com/go/adminartists.do#!/artist/" + venue.getArtistID());
+//                }
+//                else
+//                {
+//                    logger.info(i + "/" + venues.getTotalSize() + "  " + venue.getName() + " does not have spotify" + "   https://dashboard.promogogo.com/go/adminartists.do#!/artist/" + venue.getArtistID());
+//                }
+//                bandsInTownWorker.importVenue(venue);
+//            }
+//            offset = venues.getNextOffset();
+//            if (offset == null)
+//            {
+//                done = true;
+//            }
+//        }
+    }
+
+
+
     public void updateFromSpotify(String country)
     {
 
@@ -531,7 +693,7 @@ public class PrepareCountry
         String offset = null;
         Integer limit = 50;
         Boolean done = false;
-        int skip = 150;
+        int skip = 0;
         int i = 0;
         while (!done)
         {
@@ -562,6 +724,10 @@ public class PrepareCountry
 
             offset = artists.getNextOffset();
             if (offset == null)
+            {
+                done = true;
+            }
+            if (i > 150)
             {
                 done = true;
             }

@@ -152,7 +152,7 @@ class QueueUtilsTest
         Cache.create(credentialsProvider.resolveCredentials(), "localhost:11211");
 
         QueueUtils queueUtils = new QueueUtils(credentialsProvider, "localhost:11211");
-        queueUtils.cleanupProgressEntries();
+        queueUtils.updateStaleInSchemaWorker();
         try
         {
             Thread.sleep(1000000);

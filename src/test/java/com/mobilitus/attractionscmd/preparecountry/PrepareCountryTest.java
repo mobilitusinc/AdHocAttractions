@@ -22,7 +22,8 @@ import java.util.List;
 class PrepareCountryTest
 {
     private PrepareCountry toTest;
-    String country = "NO";
+    private String country = "NO";
+    private String scrapingbeeApiKey = "GJ72QA4XT0L6J08RRE04WI62QVL0V4L9JVIPV2T2WYQX4JWHAPOCN09YF0OI1FKBP9U1WURVWJ2I8145";
 
     static
     {
@@ -35,7 +36,7 @@ class PrepareCountryTest
     {
 
         Logger.getRootLogger().setLevel(Level.INFO);
-        toTest = new PrepareCountry();
+        toTest = new PrepareCountry(scrapingbeeApiKey);
 
     }
 
@@ -44,6 +45,7 @@ class PrepareCountryTest
     {
         // start 3679 upcoming events in Norway
         // 4532 events in eod
+        // 4493
         List<GogoEventSearchData> events = toTest.getEvents(country);
         int i = 0;
         for (GogoEventSearchData event : events)
@@ -60,18 +62,20 @@ class PrepareCountryTest
         // start
         // 778 artists with 901 upcoming events of 15.109, 583 are active (with one or more events)
         // 1679 eod
+        // 1724
         List<ArtistData> artists = toTest.getArtists(country);
         for (ArtistData artist : artists)
         {
             System.out.println(artist.getName() + " " + artist.getMajorType() + " " + artist.getUpcoming() + "/" + artist.getAll());
         }
     }
-//
-//    @Test
-//    void listUpcomingArtistsAbroad()
-//    {
-//    }
-//
+
+    @Test
+    void listUpcomingArtistsAbroad()
+    {
+        toTest.listUpcomingArtistsAbroad(country);
+    }
+
     @Test
     void mapGenres()
     {
@@ -86,9 +90,16 @@ class PrepareCountryTest
         toTest.updateFromSpotify(country);
     }
 
-     @Test
+    @Test
+    void updateFromBandsInTown()
+    {
+        toTest.updateArtistsFromBandsInTown(country);
+    }
+
+    @Test
     public void testGetPlaylist()
     {
+        // should split htis up into popular in country and from country
         String top50 = "https://open.spotify.com/playlist/37i9dQZEVXbJvfa0Yxg7E7";
         String topNorawy = "https://open.spotify.com/playlist/5ezCvZuFJcmMUeOynIYp6g";
         String itsHits = "https://open.spotify.com/playlist/37i9dQZF1EIg0Su2BAe75w";

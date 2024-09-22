@@ -9,6 +9,7 @@ import com.mobilitus.persisted.imports.ImportProcessPersisted;
 import com.mobilitus.persisted.utils.EntryStatus;
 import com.mobilitus.util.data.attractions.DataSource;
 import com.mobilitus.util.data.gogo.PromoGhettoData;
+import com.mobilitus.util.data.schema.SchemaEvent;
 import com.mobilitus.util.data.ticketMaster.EventGhettoData;
 import com.mobilitus.util.distributed.aws.cloudsearch.DefaultSearchConfig;
 import com.mobilitus.util.distributed.aws.cloudsearch.SearchConfig;
@@ -29,8 +30,6 @@ import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedAsyncClient;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -74,13 +73,14 @@ public class QueueUtils
         eventWorker = new EventWorker(null, null, mapper, AWSUtils.getS3(), searchConfig);
     }
 
-    public Integer cleanupProgressEntries()
+    public Integer updateStaleInSchemaWorker()
     {
         SdkPublisher<ImportProcessPersisted> all = ImportProcessPersisted.findAll(mapper);
 
         AtomicReference<Integer> reProcess = new AtomicReference<>(0);
         AtomicReference<Integer> deleted = new AtomicReference<>(0);
         AtomicReference<Integer> allentries = new AtomicReference<>(0);
+        AtomicReference<Integer> stale = new AtomicReference<>(0);
 
         CompletableFuture<Void> future = new CompletableFuture<>();
         all.subscribe(new Subscriber<>()
@@ -99,19 +99,39 @@ public class QueueUtils
                     return;
                 }
                 //                 results.add(eventImportQueuePersisted);
-                Integer duplicates = removeDuplicates(importProcess);
+//                Integer duplicates = removeDuplicates(importProcess);
 
-                if (duplicates > 0)
-                {
-                    logger.info (reProcess.get() + "/" + count.get() +"/" + allentries.get() + " found  " + duplicates.intValue() + " of " + importProcess.toString());
-                    reProcess.set(reProcess.get() + 1);
-                    deleted.set(deleted.get() + duplicates);
-                }
-                else
-                {
-                    logger.info (reProcess.get() + "/" + count.get()  +"/" + allentries.get()  + " no duplicates " + importProcess.toString());
-                }
-                allentries.set(allentries.get() + 1 + duplicates);
+//                if (duplicates > 0)
+//                {
+//                    logger.info (reProcess.get() + "/" + count.get() +"/" + allentries.get() + " found  " + duplicates.intValue() + " of " + importProcess.toString());
+//                    reProcess.set(reProcess.get() + 1);
+//                    deleted.set(deleted.get() + duplicates);
+//                }
+//                else
+//                {
+                    if (!importProcess.isDone())
+                    {
+                        SchemaEvent event =importProcess.getSchemaEvent();
+                        if (importProcess.getCreated().plusMinutes(5).isAfter(ZonedDateTime.now()))
+                        {
+                            return;
+                        }
+
+                        if (event.getStartDate().isAfterNow())
+                        {
+                            logger.info(reProcess.get() + "/" + count.get() + "  nudging " +  event.getName() + " a:" + importProcess.artistStatus() + " v:" + importProcess.venueStatus() +
+                                        " e:" + importProcess.eventStatus() + " " + getAgeStr(Duration.between(importProcess.getUpdated(), ZonedDateTime.now())));
+                            if (importProcess.isArtistDone() && importProcess.isVenueDone())
+                            {
+                                importProcess.setEventStatus(EntryStatus.pending.value());
+                                importProcess.setUpdated(ZonedDateTime.now());
+                                ImportProcessPersisted.getTable(mapper).putItem(importProcess);
+                                reProcess.set(reProcess.get() + 1);
+                            }
+                        }
+                    }
+//                }
+//                allentries.set(allentries.get() + 1 + duplicates);
                 count.set(count.get() + 1);
             }
 
@@ -127,6 +147,7 @@ public class QueueUtils
             public void onComplete()
             {
                 System.out.println("Fixed duplicates removed " + deleted.get()  + " of " + count.get());
+                System.out.println("Kicked  " + stale.get()  + " entries " );
                 future.complete(null);
             }
         });
@@ -157,31 +178,31 @@ public class QueueUtils
 
     }
 
-    private Integer removeDuplicates(ImportProcessPersisted importProcess)
-    {
-        List<ImportProcessPersisted> allForEvent = ImportProcessPersisted.findByRemoteEventID(mapper, importProcess.getRemoteEventID());
-        Map<String, String> venues = new HashMap<>();
-        Map<String, String> artists = new HashMap<>();
-        venues.put(importProcess.getRemoteVenueID(), importProcess.getRemoteVenueID());
-        artists.put(importProcess.getRemoteArtistID(), importProcess.getRemoteArtistID());
-        Integer duplicates = 0;
-
-        for (ImportProcessPersisted process : allForEvent)
-        {
-            if (process.getId().equalsIgnoreCase(importProcess.getId()))
-            {
-                continue;
-            }
-
-            if (venues.get(process.getRemoteVenueID()) != null && artists.get(process.getRemoteArtistID()) != null)
-            {
-                duplicates++;
-
-                ImportProcessPersisted.getTable(mapper).deleteItem(process);
-            }
-        }
-        return duplicates;
-    }
+//    private Integer removeDuplicates(ImportProcessPersisted importProcess)
+//    {
+//        List<ImportProcessPersisted> allForEvent = ImportProcessPersisted.findByRemoteEventID(mapper, importProcess.getRemoteEventID());
+//        Map<String, String> venues = new HashMap<>();
+//        Map<String, String> artists = new HashMap<>();
+//        venues.put(importProcess.getRemoteVenueID(), importProcess.getRemoteVenueID());
+//        artists.put(importProcess.getRemoteArtistID(), importProcess.getRemoteArtistID());
+//        Integer duplicates = 0;
+//
+//        for (ImportProcessPersisted process : allForEvent)
+//        {
+//            if (process.getId().equalsIgnoreCase(importProcess.getId()))
+//            {
+//                continue;
+//            }
+//
+//            if (venues.get(process.getRemoteVenueID()) != null && artists.get(process.getRemoteArtistID()) != null)
+//            {
+//                duplicates++;
+//
+//                ImportProcessPersisted.getTable(mapper).deleteItem(process);
+//            }
+//        }
+//        return duplicates;
+//    }
 
     public Integer reImport()
     {
