@@ -1,22 +1,18 @@
 package com.mobilitus.attractionscmd.tix.data;
 
-import com.google.gson.annotations.SerializedName;
-import com.mobilitus.util.data.attractions.ArtistData;
-import com.mobilitus.util.data.attractions.AttractionDataUtil;
-import com.mobilitus.util.data.attractions.AttractionType;
-import com.mobilitus.util.data.attractions.Genre;
-import com.mobilitus.util.data.attractions.GenreData;
-import com.mobilitus.util.data.attractions.GogoClassification;
-import com.mobilitus.util.data.attractions.MinorAttractionType;
-import com.mobilitus.util.data.attractions.VenueData;
-import com.mobilitus.util.data.attributes.AttributeData;
-import com.mobilitus.util.data.ticketMaster.EventGhettoData;
-import org.apache.log4j.Logger;
-import org.jsoup.Jsoup;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import org.apache.log4j.Logger;
+import org.jsoup.Jsoup;
+
+import com.google.gson.annotations.SerializedName;
+import com.mobilitus.util.data.attractions.AttractionType;
+import com.mobilitus.util.data.attractions.MinorAttractionType;
+import com.mobilitus.util.data.schema.SchemaArtist;
+import com.mobilitus.util.data.schema.SchemaEvent;
+import com.mobilitus.util.data.ticketMaster.EventGhettoData;
 
 /**
  * @author helgaw
@@ -70,35 +66,38 @@ public class TixEvent
         return dates;
     }
 
-    public List<EventGhettoData> toDataList()
+    public List<SchemaEvent> toDataList()
     {
         if (dates == null)
         {
             return Collections.emptyList();
         }
 
-        List<EventGhettoData> events = new ArrayList<>(dates.size());
+        List<SchemaEvent> events = new ArrayList<>(dates.size());
 
         Boolean isTribute = false;
 
 
         for (TixDate concert : dates)
         {
-            EventGhettoData data = concert.toData(this);
+            SchemaEvent data = concert.toData(this);
             AttractionTypeHandler attractionHandler = new AttractionTypeHandler(this, concert);
 
-            String title = attractionHandler.createTitle(getName(), data.getTitle());
-            data.setTitle(title);
+            String title = attractionHandler.createTitle(getName(), data.getName());
+            data.setName(title);
+            data.setDescription(getDescription());
 
             AttractionType majorAttractionType = attractionHandler.getMajorAttractionType();
-            data.setMajorType(majorAttractionType);
-            data.addMinorTypes(attractionHandler.getMinorAttractionTypes());
-            if (attractionHandler.getGenre() != null)
+            data.setType(majorAttractionType);
+            for (MinorAttractionType minor : attractionHandler.getMinorAttractionTypes())
+            {
+                data.addInternalType(minor.name());
+            }
+            /*if (attractionHandler.getGenre() != null)
             {
                 data.addGogoGenre(Genre.create(attractionHandler.getGenre().getId()));
-            }
+            }*/
 
-            data.addClassifications(attractionHandler.getClassifications());
 
 //                logger.info("'" + title + "' ('" + getName() +"' / '" + concert.getName() + "') " + getSubTitle()  +  " // " + majorAttractionType + " "  + " // artists "  + getArtistNames(concert) );
 //
@@ -106,7 +105,7 @@ public class TixEvent
 
             if (eventGroupID != 0)
             {
-                data.setEventID(eventGroupID + "-" + data.getEventID());
+                data.setId(eventGroupID + "-" + data.getId());
             }
             else
             {
@@ -115,7 +114,7 @@ public class TixEvent
                     ;
                 }
                 {
-                    data.setEventID( hostName + "-" + id);
+                    data.setId( hostName + "-" + id);
                     data.setUrl(hostUrl + url);
                     if ((concert.getMinPrice()  == null || concert.getMinPrice().intValue() == 0)  &&
                         (concert.getMaxPrice()  == null || concert.getMaxPrice().intValue() == 0))
@@ -125,30 +124,21 @@ public class TixEvent
                     }
                 }
             }
-            if (hostUrl != null)
-            {
-                extendForHost(hostName, kenni, data);
-                if (majorAttractionType == null)
-                {
-                   majorAttractionType = data.getMajorType();
-                }
-            }
 
-
-            data.addAttribute("description", cleanMarkup(getDescription()));
+            /*data.addAttribute("description", cleanMarkup(getDescription()));
             data.addAttribute("description-html",  getDescription());
-
+*/
             if (attractionHandler.isTribute())
             {
                 data.addAttribute("genre", "tribute");
-                data.addClassification(GogoClassification.tribute);
+                data.addHint("tribute","true");
             }
 //            logger.info("event is " + title + " " + getCategories());
 
-            for (ArtistData f : getArtists(concert, majorAttractionType))
+            for (SchemaArtist f : getArtists(concert, majorAttractionType))
             {
                 data.addArtist(f);
-                if (data.getMajorType() == null && f.getMajorType() != null)
+                /*if (data.getMajorType() == null && f.getMajorType() != null)
                 {
                     data.setMajorType(f.getMajorType());
                 }
@@ -167,18 +157,33 @@ public class TixEvent
                 for (AttributeData att : f.getAttributes())
                 {
                     data.addAttribute(att.getKey(), att.getValue());
-                }
+                }*/
 
             }
             if (getImageUrl() != null && !getImageUrl().isEmpty())
             {
                 // image url is a squareish image getImage is a header image (get dimensions)
-                data.addAttribute("imageHeader", getImage());
-                data.addAttribute("imageURL", AttractionDataUtil.getSafeImageUrlFromTrustedSources(getImageUrl()));
-                data.addAttribute("thumb", AttractionDataUtil.getSafeImageUrlFromTrustedSources(getImageUrl()));
+                String imageUrl = getImageUrl();
+                String featuredImage = getFeaturedImage();
+
+                if (imageUrl != null && !imageUrl.isEmpty())
+                {
+                    imageUrl = imageUrl.replaceAll("https://cdn.tix.is/tix", "https://cdn.tixly.com/is/tix");
+                }
+                if(featuredImage != null && !featuredImage.isEmpty())
+                {
+                    featuredImage = featuredImage.replaceAll("https://cdn.tix.is/tix", "https://cdn.tixly.com/is/tix");
+                }
+
+                data.addImage(imageUrl);
+                //data.addImage(featuredImage);
             }
             data.addAttribute("eventURL", getPurchaseUrl());
-            data.setPurchaseLink(getPurchaseUrl());
+            data.setUrl(getPurchaseUrl());
+
+
+
+            //data.setPurchaseLink(getPurchaseUrl());
              if (getDescriptionEnglish() != null && !getDescriptionEnglish().isEmpty())
              {
                  data.addAttribute("description-en", cleanMarkup(getDescriptionEnglish()));
@@ -196,7 +201,7 @@ public class TixEvent
             {
                 data.addAttribute("name-en", getNameEnglish());
             }
-            data.setStaleAfter(null);
+            //data.setStaleAfter(null);
             events.add(data);
 
         }
@@ -225,7 +230,7 @@ public class TixEvent
 
     private void extendNatKop(EventGhettoData data)
     {
-        if (data.getVenue() == null)
+        /*if (data.getVenue() == null)
         {
             data.setVenue(KopavogurNatureMuseumVenue.createVenue());
         }
@@ -247,7 +252,7 @@ public class TixEvent
         for (GogoClassification clas : classifications)
         {
             data.addClassification(clas);
-        }
+        }*/
 //        if (genre != null)
 //        {
 //            data.setGogoGenre(genre);
@@ -263,7 +268,7 @@ public class TixEvent
 
     private void extendBokKop(EventGhettoData data, String hall)
     {
-        if (data.getVenue() == null)
+        /*if (data.getVenue() == null)
         {
             data.setVenue(KopavogurLibraryVenue.createVenue(hall));
         }
@@ -294,7 +299,7 @@ public class TixEvent
         logger.info ("major " + data.getMajorType());
         logger.info ("minor " + data.getMinorTypes());
         logger.info ("class " + data.getClassifications());
-        logger.info ("");
+        logger.info ("");*/
     }
 
     private void extendSalurinn(EventGhettoData data)
@@ -315,7 +320,7 @@ public class TixEvent
 
     private void extendGerdarsafn(EventGhettoData data)
     {
-        if (data.getVenue() == null)
+        /*if (data.getVenue() == null)
         {
             data.setVenue(GerdarsafnVenue.createVenue());
         }
@@ -323,7 +328,7 @@ public class TixEvent
         if (data.getMajorType() == null)
         {
             data.setMajorType(AttractionType.arts);
-        }
+        }*/
         // parse subPage
     }
 
@@ -337,22 +342,6 @@ public class TixEvent
     public String getDescription()
     {
         return description;
-    }
-
-
-    public List<VenueData> getVenues()
-    {
-        List<VenueData> list = new ArrayList<>(10);
-        if (dates == null)
-        {
-            return Collections.emptyList();
-        }
-        List<EventGhettoData> events = new ArrayList<>(dates.size());
-        for (TixDate concert : dates)
-        {
-            list.add(concert.getVenueData(this));
-        }
-        return list;
     }
 
 
@@ -457,7 +446,7 @@ public class TixEvent
     {
         StringBuilder buf = new StringBuilder();
 
-        for (ArtistData artist : getArtists(concert, null))
+        for (SchemaArtist artist : getArtists(concert, null))
         {
             if (buf.length() > 1)
             {
@@ -471,18 +460,18 @@ public class TixEvent
 
 
 
-    public List<ArtistData> getArtists(TixDate date)
+    public List<SchemaArtist> getArtists(TixDate date)
     {
         TixArtistHandler artistHandler = new TixArtistHandler(this, date, null);
-        List<ArtistData> artists =  artistHandler.getArtists();
+        List<SchemaArtist> artists =  artistHandler.getArtists();
         return artists;
     }
 
 
-    public List<ArtistData> getArtists(TixDate date, AttractionType attractionType)
+    public List<SchemaArtist> getArtists(TixDate date, AttractionType attractionType)
     {
         TixArtistHandler artistHandler = new TixArtistHandler(this, date, attractionType);
-        List<ArtistData> artists =  artistHandler.getArtists();
+        List<SchemaArtist> artists =  artistHandler.getArtists();
 //        for (ArtistData artist : artists)
 //        {
 //            logger.info("\tartist '" + artist.getName() + "' '" + artist.getMajorType() + "' genre: '" + artist.getGogoGenre() + "' minor " +  artist.getMinorTypes() + "  classifications " + artist.getClassifications() + " <-- " + date.getCategories() + " " + date.getTags());

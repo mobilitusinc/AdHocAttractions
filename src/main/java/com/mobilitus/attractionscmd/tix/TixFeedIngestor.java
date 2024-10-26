@@ -1,5 +1,20 @@
 package com.mobilitus.attractionscmd.tix;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.log4j.Logger;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
 import com.mobilitus.util.data.attractions.AttractionType;
 import com.mobilitus.util.data.aws.kinesis.KinesisStream;
 import com.mobilitus.util.data.pusher.MessageType;
@@ -14,21 +29,7 @@ import com.mobilitus.util.distributed.dynamodb.AWSUtils;
 import com.mobilitus.util.hexia.StrUtil;
 import com.mobilitus.util.hexia.location.CountryCode;
 import com.mobilitus.util.hexia.location.LocationUtil;
-import org.apache.log4j.Logger;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * @author helgaw
@@ -37,7 +38,7 @@ import java.util.Map;
  */
 public class TixFeedIngestor
 {
-    private  SchemaArtist airwaves;
+    private SchemaArtist airwaves;
 
     private Producer toCreator;
 
@@ -48,6 +49,7 @@ public class TixFeedIngestor
     // feed info for tix
     //  	https://api.tix.is/Events/<partnerid>
     //      partner id is 	38540f0ce9924958
+
 
     public TixFeedIngestor()
     {
@@ -64,9 +66,10 @@ public class TixFeedIngestor
 
     }
 
+
     private Map<String, SchemaArtist> createArtistMap()
     {
-        airwaves = new SchemaArtist();
+        /*airwaves = new SchemaArtist();
         airwaves.setId("iceland-airwaves");
         airwaves.setName("Iceland Airwaves");
         airwaves.setLocation(CountryCode.is);
@@ -75,9 +78,10 @@ public class TixFeedIngestor
         airwaves.setSource("IcelandAirwaves");
         airwaves.setWebpage("https://icelandairwaves.is");
         airwaves.addAttribute("icelandAirwaves", "IcelandAirwaves2024");
-        artists.put("iceland airwaves", airwaves);
+        artists.put("iceland airwaves", airwaves);*/
         return artists;
     }
+
 
     private Map<String, SchemaLocation> createVenueMap()
     {
@@ -98,7 +102,7 @@ public class TixFeedIngestor
         //
         // both will result in a more lenient location check with a bigger radius if there is a location point present
 
-        SchemaLocation artMuseum = new SchemaLocation();
+        /*SchemaLocation artMuseum = new SchemaLocation();
         artMuseum.setId("art-museum");
         artMuseum.setName("Art Museum");
         artMuseum.setStreetAddress("Tryggvagata 17");
@@ -171,7 +175,7 @@ public class TixFeedIngestor
         frikirkjan.addAttribute("accessibility", "fully accessible");
         frikirkjan.setSource("IcelandAirwaves");
         venues.put("frikirkjan", frikirkjan);
-        venues.put("fríkirkjan", frikirkjan);
+        venues.put("fríkirkjan", frikirkjan);*/
         // this is just all put in a map because the same venues are reused over and over again
         return venues;
     }
@@ -181,38 +185,31 @@ public class TixFeedIngestor
     {
         Integer index = 0;
         Integer total = 0;
-        String[] urls = { "https://icelandairwaves.is/schedule-thursday/",
-                           "https://icelandairwaves.is/schedule-friday/",
-                           "https://icelandairwaves.is/schedule-saturday/"
-                        };
+        TixHandler handler = new TixHandler();
 
-        DateTime dayOf = new DateTime(2024, 11, 7, 0, 0, 0);
-        for (String url : urls)
+        List<SchemaEvent> events = handler.getEvents();
+        total += events.size();
+        for (SchemaEvent event : events)
         {
-            Document htmlPage = getDocument (url);
-            List<SchemaEvent> events = parsePage(htmlPage, dayOf);
-            total += events.size();
-            for (SchemaEvent event : events)
+            logger.info(index + "/" + total + "\n" + StrUtil.formatAsJson(event.toJson()));
+            String pushID = event.getId();
+            PusherMessage msg = wrapEnvelope(event, pushID);
+            //                updateDB(entry.getId(), msg.getTitle(),  "in pipeline", EntryStatus.inPipeline);
+            try
             {
-                logger.info(index + "/" + total + "\n" + StrUtil.formatAsJson(event.toJson()));
-                String pushID = event.getId() + "icelandArwaves";
-                PusherMessage msg = wrapEnvelope(event, pushID);
-                //                updateDB(entry.getId(), msg.getTitle(),  "in pipeline", EntryStatus.inPipeline);
-                try
-                {
-                    toCreator.sendAsObj(pushID, MessageType.eventUpdated.name(), msg.toJson());
-                }
-                catch (Exception e)
-                {
-                    logger.error(event.getName());
-                    logger.error(StrUtil.stack2String(e));
-                }
-                index++;
+                toCreator.sendAsObj(pushID, MessageType.eventUpdated.name(), msg.toJson());
             }
-            dayOf = dayOf.plusDays(1);
+            catch (Exception e)
+            {
+                logger.error(event.getName());
+                logger.error(StrUtil.stack2String(e));
+            }
+            index++;
         }
+
         toCreator.flush();
     }
+
 
     private List<SchemaEvent> parsePage(Document document, DateTime dayOf)
     {
@@ -234,6 +231,7 @@ public class TixFeedIngestor
         }
         return events;
     }
+
 
     private List<SchemaEvent> parseLine(Element line, DateTime dayOf)
     {
@@ -257,7 +255,7 @@ public class TixFeedIngestor
         // <th class=" wdtheader sort " style="">FRÍKIRKJAN</th>
         //</tr>
         //<tr id="table_7_row_0" data-row-index="0">
-        Elements headers =  line.parent().parent().getElementsByTag("th");
+        Elements headers = line.parent().parent().getElementsByTag("th");
 
         List<SchemaEvent> events = new ArrayList<>(5);
         Elements cells = line.getElementsByTag("td");
@@ -276,16 +274,16 @@ public class TixFeedIngestor
         {
             Element cell = cells.get(i);
 
-//            logger.info(cell);
-//            logger.info(headers.get(i));
+            //            logger.info(cell);
+            //            logger.info(headers.get(i));
 
             SchemaLocation venue = getVenue(headers.get(i));
             if (venue == null)
             {
-//                logger.info("No venue for header " + headers.get(i).text());
+                //                logger.info("No venue for header " + headers.get(i).text());
                 continue;
             }
-//            logger.info( headers.get(i).text() + " --> " + venue.getName());
+            //            logger.info( headers.get(i).text() + " --> " + venue.getName());
 
             SchemaArtist artist = getArtistFromCell(cell);
             if (artist == null)
@@ -302,6 +300,7 @@ public class TixFeedIngestor
         return events;
     }
 
+
     private SchemaLocation getVenue(Element element)
     {
         String text = element.text();
@@ -312,6 +311,7 @@ public class TixFeedIngestor
         SchemaLocation loc = venues.get(element.text().toLowerCase());
         return loc;
     }
+
 
     private SchemaArtist getArtistFromCell(Element element)
     {
@@ -328,7 +328,7 @@ public class TixFeedIngestor
         {
             return null;
         }
-//        logger.info (element);
+        //        logger.info (element);
         artistName = artistName.trim();
 
         SchemaArtist artist = artists.get(artistName.toLowerCase());
@@ -343,6 +343,7 @@ public class TixFeedIngestor
         }
         return artist;
     }
+
 
     private SchemaArtist scrapeArtistPage(String url, String artistName)
     {
@@ -368,7 +369,7 @@ public class TixFeedIngestor
         {
             return null;
         }
-//        logger.info (document);
+        //        logger.info (document);
 
         Elements artistElements = document.getElementsByClass("artist");
         SchemaArtist artist = new SchemaArtist();
@@ -414,7 +415,7 @@ public class TixFeedIngestor
             artist.addSameAs(spotify);
         }
         String video = getVideoEmbed(artistElements);
-        if(video != null)
+        if (video != null)
         {
             artist.setDefaultEmbed(video);
         }
@@ -426,7 +427,7 @@ public class TixFeedIngestor
     }
 
 
-    private SchemaEvent createEvent (SchemaArtist artist, SchemaLocation venue, DateTime start)
+    private SchemaEvent createEvent(SchemaArtist artist, SchemaLocation venue, DateTime start)
     {
         SchemaEvent event = new SchemaEvent();
         event.setName(artist.getName() + " @ Airwaves");
@@ -458,12 +459,13 @@ public class TixFeedIngestor
         event.addArtist(artist);
         event.addArtist(airwaves);
 
-         // add hint useAI if you want to use the AI to parse the event to find artists or if the event could be multiple events
+        // add hint useAI if you want to use the AI to parse the event to find artists or if the event could be multiple events
         // event.addHint("useAI", "true");
         // the NLP called used in that case is  https://translator.promogogo.com/docs#/default/event_nlp_event_post
 
         return event;
     }
+
 
     private String getSocialMedia(Elements artistElements, String site)
     {
@@ -493,7 +495,7 @@ public class TixFeedIngestor
         String[] parts = time.split(":");
         int hour = Integer.parseInt(parts[0]);
         int minute = Integer.parseInt(parts[1]);
-        DateTime showTime =  dayOf.withHourOfDay(hour).withMinuteOfHour(minute).withZone(DateTimeZone.forID("Atlantic/Reykjavik"));
+        DateTime showTime = dayOf.withHourOfDay(hour).withMinuteOfHour(minute).withZone(DateTimeZone.forID("Atlantic/Reykjavik"));
         if (hour < 8)
         {
             showTime = showTime.plusDays(1);
@@ -501,14 +503,14 @@ public class TixFeedIngestor
         return showTime;
     }
 
+
     private Document getDocument(String url)
     {
 
         try
         {
             // Send the request and get the response
-            Document response = Jsoup.connect(url)
-                                     .get();
+            Document response = Jsoup.connect(url).get();
 
             return response;
         }
@@ -542,11 +544,13 @@ public class TixFeedIngestor
         return null;
     }
 
+
     private String getDescription(Document document)
     {
         Elements elementsByClass = document.getElementsByClass("description-content");
         return elementsByClass.html();
     }
+
 
     private String getFacebook(Elements artistElements)
     {
@@ -567,10 +571,12 @@ public class TixFeedIngestor
         return str;
     }
 
+
     private String getTwitter(Elements artistElements)
     {
         return getSocialMedia(artistElements, "twitter");
     }
+
 
     private String getSpotify(Elements artistElements)
     {
@@ -581,10 +587,11 @@ public class TixFeedIngestor
         }
         if (str.contains("?si="))
         {
-            str = str.substring(0,str.indexOf("?"));
+            str = str.substring(0, str.indexOf("?"));
         }
         return str;
     }
+
 
     private List<String> getGenre(Elements artistElements)
     {
@@ -609,6 +616,7 @@ public class TixFeedIngestor
         return genres;
     }
 
+
     private CountryCode getLocation(Elements artistElements)
     {
         Elements tags = artistElements.get(0).getElementsByClass("tags");
@@ -630,6 +638,7 @@ public class TixFeedIngestor
         }
         return null;
     }
+
 
     private String getVideoEmbed(Elements artistElements)
     {
@@ -670,7 +679,7 @@ public class TixFeedIngestor
         msg.add("importerid", id);
 
 
-//        logger.info(ev.getName() + " Sending event '" + ev.getName() + "' to importer");
+        //        logger.info(ev.getName() + " Sending event '" + ev.getName() + "' to importer");
         return msg;
     }
 

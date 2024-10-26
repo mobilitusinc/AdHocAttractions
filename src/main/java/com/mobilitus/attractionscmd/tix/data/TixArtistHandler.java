@@ -1,25 +1,29 @@
 package com.mobilitus.attractionscmd.tix.data;
 
-import com.mobilitus.util.data.attractions.ArtistData;
-import com.mobilitus.util.data.attractions.AttractionType;
-import com.mobilitus.util.data.attractions.Genre;
-import com.mobilitus.util.data.attractions.GenreData;
-import com.mobilitus.util.data.attractions.GogoClassification;
-import com.mobilitus.util.data.attractions.MinorAttractionType;
-import com.mobilitus.util.data.attractions.textHandler.IcelandicTextHandler;
-import com.mobilitus.util.data.location.LocationData;
-import com.mobilitus.util.hexia.location.CountryCode;
-import org.apache.log4j.Logger;
-import org.joda.time.DateTime;
-import org.joda.time.format.DateTimeFormat;
-import org.jsoup.Jsoup;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.apache.log4j.Logger;
+import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormat;
+import org.jsoup.Jsoup;
+
+import com.mobilitus.util.data.attractions.ArtistData;
+import com.mobilitus.util.data.attractions.AttractionType;
+import com.mobilitus.util.data.attractions.DataSource;
+import com.mobilitus.util.data.attractions.Genre;
+import com.mobilitus.util.data.attractions.GenreData;
+import com.mobilitus.util.data.attractions.GogoClassification;
+import com.mobilitus.util.data.attractions.MinorAttractionType;
+import com.mobilitus.util.data.attractions.textHandler.IcelandicTextHandler;
+import com.mobilitus.util.data.location.LocationData;
+import com.mobilitus.util.data.schema.SchemaAddress;
+import com.mobilitus.util.data.schema.SchemaArtist;
+import com.mobilitus.util.hexia.location.CountryCode;
 
 /**
  * @author helgaw
@@ -48,9 +52,9 @@ public class TixArtistHandler
     }
 
 
-    public List<ArtistData> getArtists()
+    public List<SchemaArtist> getArtists()
     {
-        if (majorAttractionType == null)
+        /*if (majorAttractionType == null)
         {
             return createBasicArtist();
         }
@@ -71,13 +75,13 @@ public class TixArtistHandler
         else if (majorAttractionType == AttractionType.music)
         {
             return getMusicArtists();
-        }
+        }*/
         return createBasicArtist();
     }
 
-    private List<ArtistData> createBasicArtist()
+    private List<SchemaArtist> createBasicArtist()
     {
-        ArtistData artist = new ArtistData();
+        SchemaArtist artist = new SchemaArtist();
 
         String title = cleanName(event.createTitle(event.getName(), date.getName()));
         if (skipName(title))
@@ -85,26 +89,36 @@ public class TixArtistHandler
             return Collections.emptyList();
         }
         artist.setName(title);
-        artist.setBestImage(event.getFeaturedImage());
-        artist.setBestThumb(event.getFeaturedImage());
+        String image = event.getImage();
+        if (image == null || image.isEmpty())
+        {
+            image = image.replaceAll("https://cdn.tix.is/tix", "https://cdn.tixly.com/is/tix");
+            artist.setImage(image);
+        }
+        artist.setSource(DataSource.tixis.name());
+        //artist.setBestThumb(event.getFeaturedImage());
         if (majorAttractionType !=  AttractionType.film)
         {
-            artist.setHome(new LocationData(CountryCode.is));
+            SchemaAddress address = new SchemaAddress();
+            address.setAddressCountry(CountryCode.is.name());
+            artist.setLocation(address);
         }
         if (majorAttractionType != null)
         {
-            artist.setArtistID(title.toLowerCase() + " " + majorAttractionType.name());
+            artist.setId(title.toLowerCase() + " " + majorAttractionType.name());
         }
         else
         {
-            artist.setArtistID(title.toLowerCase() + " " + AttractionType.other.name());
+            artist.setId(title.toLowerCase() + " " + AttractionType.other.name());
         }
-
-        artist.setMajorType(majorAttractionType);
-        artist.addClassifications(IcelandicTextHandler.getClassifications(title, event.getDescription(), event.getCategories()));
+        if(majorAttractionType != null)
+        {
+            artist.setAttractionType(majorAttractionType);
+        }
+        /*artist.addClassifications(IcelandicTextHandler.getClassifications(title, event.getDescription(), event.getCategories()));
         artist.addMinorTypes(IcelandicTextHandler.getMinorAttractionTypes(title, event.getDescription(), event.getCategories()));
-
-        List<ArtistData> allArtists = new ArrayList<>();
+*/
+        List<SchemaArtist> allArtists = new ArrayList<>();
         allArtists.add(artist);
 
         return allArtists;

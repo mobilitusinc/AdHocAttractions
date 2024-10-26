@@ -1,24 +1,24 @@
 package com.mobilitus.attractionscmd.tix.data;
 
-import com.google.gson.annotations.SerializedName;
-import com.mobilitus.util.data.attractions.AttractionType;
-import com.mobilitus.util.data.attractions.MinorAttractionType;
-import com.mobilitus.util.data.attractions.VenueData;
-import com.mobilitus.util.data.attractions.VenueType;
-import com.mobilitus.util.data.ghetto.GhettoType;
-import com.mobilitus.util.data.ticketMaster.EventGhettoData;
-import com.mobilitus.util.data.ticketMaster.microflex.EventStatus;
-import com.mobilitus.util.hexia.location.CountryCode;
-import com.mobilitus.util.hexia.location.LocationInfo;
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
 import org.apache.log4j.Logger;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDateTime;
 
-import java.math.BigDecimal;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import com.google.gson.annotations.SerializedName;
+import com.mobilitus.util.data.attractions.AttractionType;
+import com.mobilitus.util.data.attractions.DataSource;
+import com.mobilitus.util.data.attractions.MinorAttractionType;
+import com.mobilitus.util.data.schema.SchemaEvent;
+import com.mobilitus.util.data.schema.SchemaLocation;
+import com.mobilitus.util.data.schema.SchemaOffers;
+import com.mobilitus.util.data.ticketMaster.microflex.EventStatus;
+import com.mobilitus.util.hexia.location.CountryCode;
 
 /**
  * @author helgaw
@@ -100,52 +100,51 @@ public class TixDate
     }
 
 
-    public VenueData getVenueData(TixEvent event)
+    public SchemaLocation getVenueData(TixEvent event)
     {
         if (venue != null)
         {
-            VenueData v = new VenueData();
+            SchemaLocation v = new SchemaLocation();
 
             v.setName(createVenueName());
+            v.setSource(DataSource.tixis.name());
 
             if (hall != null && !venue.equalsIgnoreCase(hall))
             {
                 v.addAttribute("hall", hall.trim());
             }
 
-            v.setTimezone(DateTimeZone.forID("Atlantic/Reykjavik"));
-            v.setLocation(new LocationInfo(CountryCode.is));
-            v.setLocationID(v.getName().trim().toLowerCase());
-            v.addAttribute("displayCountry", "Iceland");
-            v.addAttribute("displayCountry-is", "Ísland");
-            AttractionTypeHandler handler = new AttractionTypeHandler(event, this);
-            v.setMajorCategory(handler.getMajorVenueCategory());
-            v.setMinorCategory(handler.getMinorVenueCategory());
-            v.setType(VenueType.venue);
+            //v.setTimezone(DateTimeZone.forID("Atlantic/Reykjavik"));
+            //address.
+            v.setId(v.getName().trim().toLowerCase());
+            v.setAddressCountry(CountryCode.is.name());
+
             return v;
         }
 
         return null;
     }
 
-    public EventGhettoData toData(TixEvent tixEvent)
+    public SchemaEvent toData(TixEvent tixEvent)
     {
 //        logger.info(getName() + " " + getType() + " onsale "  + getOnlineSaleStartFormat().toString("HH:mm dd MMM YYYY") +
 //                    " showtime " +  getStartDateFormat() .toString("HH:mm dd MMM YYYY") + " " + getCategories() + " " + createEventStatus());
-        EventGhettoData data = new EventGhettoData(null, getName(), "");
+        SchemaEvent data = new SchemaEvent();
 
-        data.setGhettoType(GhettoType.EVENT);
+        data.setName(getName());
 
-        data.setEventID(getEventID() + "");
+        data.setType("event");
+
+        data.setId(getEventID() + "");
 
         String urlStr = getPrimaryEventUrl();
-        if (urlStr != null && !urlStr.isEmpty())
+        /*if (urlStr != null && !urlStr.isEmpty())
         {
-            data.setPurchaseLink(urlStr);
+            data.addOffer(urlStr);
 
             data.setUrl(urlStr);
             data.addAttribute("partnerURL", urlStr);
-        }
+        }*/
 
         // this is needed to let the worker know that
         // this import may have hot events set. (The feedreaded does, but not the DiscoAPI)
@@ -156,36 +155,32 @@ public class TixDate
         data.addAttribute("promoter", getPromoter());
 
 
-        data.setStatus(createEventStatus());
-        data.addAttribute("status", createEventStatus());
+        data.setEventStatus(createEventStatus());
 
 
         DateTimeZone timeZone = DateTimeZone.forID("Atlantic/Reykjavik");
         if (getVenue() != null)
         {
 
-            VenueData locVenue = getVenueData(tixEvent);
-            data.setVenue(locVenue);
+            SchemaLocation locVenue = getVenueData(tixEvent);
+            data.setLocation(locVenue);
 
-            data.addAttribute("venueCode", locVenue.getLocationID());
         }
-        data.setEventTimezone(timeZone);
 
-        data.setMinPrice(getMinPrice(), BigDecimal.ZERO, getMinPrice(), getCurrency());
-        data.setMaxPrice(getMaxPrice(), BigDecimal.ZERO, getMaxPrice(), getCurrency());
+        SchemaOffers offers = new SchemaOffers();
+        data.addOffer("",getPurchaseUrl(),getMinPrice(),getMaxPrice(),getCurrency());
 
 
         if (getStartDateTime() != null)
         {
             // these dates are always GMT.  Need to check the timezone as well
             DateTime showTime =  getStartDateTime().toDateTime(timeZone);
-            data.setLocalShowTime(showTime.toLocalDateTime());
+            data.setStartDate(showTime.toLocalDateTime().toString());
 
-            data.setShowTime(showTime.toDateTime());
             data.addAttribute("localTime", getStartLocalTime());
             if (getEndDateTime() != null)
             {
-                data.setEnd(getEndDateTime());
+                data.setEndDate(getEndDateTime().toString());
             }
             else if (duration != null && !duration.isEmpty())
             {
@@ -209,12 +204,12 @@ public class TixDate
                             str.replace(",", ".");
                         }
                         Double dur = Double.parseDouble(str);
-                        data.setEnd(showTime.plusMinutes((int) Math.round(60 * dur)));
+                        data.setLocalEndTime(showTime.plusMinutes((int) Math.round(60 * dur)).toString());
                     }
                     else
                     {
                         Integer dur = Integer.parseInt(parts[0]);
-                        data.setEnd(showTime.plusMinutes(dur));
+                        data.setLocalEndTime(showTime.plusMinutes(dur).toString());
                     }
                 }
                 catch (NumberFormatException e)
@@ -226,8 +221,8 @@ public class TixDate
         }
 
 
-        data.setCurrency(getCurrency());
-        data.addAttribute("source", "tix.is");
+        //data.addAttribute("source", "tix.is");
+        data.setSource(DataSource.tixis.name());
 
         data.addAttribute("channel", "primary");
 
@@ -237,9 +232,9 @@ public class TixDate
         AttractionType majorAttractionType = attractionTypeHandler.getMajorAttractionType();
         if ( majorAttractionType != null)
         {
-            data.setMajorType(majorAttractionType);
-            data.addAttribute("type",  majorAttractionType.name());
-            data.addAttribute("majorCategory",  majorAttractionType.name());
+            data.setAttractionType(majorAttractionType);
+            //data.addAttribute("type",  majorAttractionType.name());
+            //data.addAttribute("majorCategory",  majorAttractionType.name());
         }
         else
         {
@@ -247,7 +242,7 @@ public class TixDate
         }
         for (String category : getCategories())
         {
-            if (!data.hasAttribute("type", category.trim()))
+            /*if (!data.hasAttribute("type", category.trim()))
             {
                 data.addAttribute("genre", category.trim());
             }
@@ -258,30 +253,18 @@ public class TixDate
                 {
                     data.addAttribute("genre", translated);
                 }
-            }
+            }*/
         }
 
-        data.addMinorTypes(attractionTypeHandler.getMinorAttractionTypes());
-        data.addClassifications(attractionTypeHandler.getClassifications());
-        if (attractionTypeHandler.getMajorAttractionType() != null && attractionTypeHandler.getMajorAttractionType() == AttractionType.music)
-        {
-            data.setGogoGenre(attractionTypeHandler.getGenre());
-        }
-
-        for (MinorAttractionType minor : attractionTypeHandler.getMinorAttractionTypes())
+        for(MinorAttractionType minor : attractionTypeHandler.getMinorAttractionTypes())
         {
             if (minor != null)
             {
-                data.addMinorType(minor);
-                if (attractionTypeHandler.hasLeague(minor))
-                {
-                    data.addAttribute("League", getLeague(tixEvent));
-                }
+                data.addInternalType(minor.name());
             }
         }
 
-
-        data.setGhettoType(GhettoType.EVENT);
+        //data.setType(GhettoType.EVENT);
         if (getTags() != null && !getTags().isEmpty())
         {
             for (String tag : getTags())
@@ -303,14 +286,14 @@ public class TixDate
         }
 
 
-        if (getOnsaleStartDateTime() != null)
+        /*if (getOnsaleStartDateTime() != null)
         {
             data.setStartSellingAt(getOnsaleStartDateTime().toDateTime(timeZone));
         }
         if (getOnsaleEndDateTime() != null)
         {
             data.setEndSellingAt(getOnsaleEndDateTime().toDateTime(timeZone));
-        }
+        }*/
 
         return data;
     }

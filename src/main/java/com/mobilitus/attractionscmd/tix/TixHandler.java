@@ -1,20 +1,18 @@
 package com.mobilitus.attractionscmd.tix;
 
-import com.mobilitus.attractionscmd.tix.data.TixDate;
-import com.mobilitus.attractionscmd.tix.data.TixEvent;
-import com.mobilitus.util.data.attractions.ArtistData;
-import com.mobilitus.util.data.attractions.AttractionType;
-import com.mobilitus.util.data.attractions.MinorVenueCategory;
-import com.mobilitus.util.data.attractions.VenueData;
-import com.mobilitus.util.data.face.FaceData;
-import com.mobilitus.util.data.ticketMaster.EventGhettoData;
-import org.apache.log4j.Logger;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.log4j.Logger;
+
+import com.mobilitus.attractionscmd.tix.data.TixEvent;
+import com.mobilitus.util.data.attractions.ArtistData;
+import com.mobilitus.util.data.attractions.AttractionType;
+import com.mobilitus.util.data.schema.SchemaEvent;
+import com.mobilitus.util.data.ticketMaster.EventGhettoData;
 
 /**
  * @author helgaw
@@ -27,79 +25,13 @@ public class TixHandler
 
     private TixAPI api;
 
-    public TixHandler(String source)
+    public TixHandler()
     {
-        api = new TixAPI(source);
+        api = new TixAPI();
     }
 
 
-    public List<VenueData> getVenues()
-    {
-        List<TixEvent> events = api.getEvents();
-        List<VenueData> venues = new ArrayList<>(100);
-        Map<String, VenueData> venueMap = new HashMap(100);
-        for (TixEvent event : events)
-        {
-            for (VenueData v : event.getVenues())
-            {
-//                logger.info( v.getName() + " " + v.getMajorCategory() + " " + v.getMinorCategory());
-//                logger.info("\t"+ event.getName() + " " + event.getType() + " " + event.getCategories());
-
-                if (venueMap.get(v.getName().trim()) == null)
-                {
-                    venueMap.put(v.getName().trim(), v);
-                }
-                else
-                {
-                    VenueData myVenue = venueMap.get(v.getName().trim());
-                    if (myVenue.getMajorCategory() == null)
-                    {
-                        myVenue.setMajorCategory(v.getMajorCategory());
-                    }
-
-                    if (v.getMinorCategory() != null)
-                    {
-                        for (MinorVenueCategory min : v.getMinorCategory())
-                        {
-                            myVenue.addMinorCategory(min);
-                        }
-                    }
-                    venueMap.put(v.getName().trim(), myVenue);
-                }
-
-            }
-        }
-        venues.addAll(venueMap.values());
-        return venues;
-    }
-
-
-    public List<ArtistData> getArtists()
-    {
-        List<TixEvent> events = api.getEvents();
-
-        Map<String, FaceData> artistMap = new HashMap(200);
-        List<ArtistData> artists = new ArrayList<>(200);
-        for (TixEvent event : events)
-        {
-            for (TixDate date : event.getDates())
-            {
-                for (ArtistData a : event.getArtists(date))
-                {
-//                System.out.println("\t" + a.getName());
-                    if (artistMap.get(a.getName().trim()) == null)
-                    {
-                        artistMap.put(a.getName().trim(), a);
-                        artists.add(a);
-                    }
-                }
-            }
-        }
-        return artists;
-    }
-
-
-    public List<EventGhettoData> getEvents()
+    public List<SchemaEvent> getEvents()
     {
         List<TixEvent> events = api.getEvents();
 
@@ -108,7 +40,7 @@ public class TixHandler
             return Collections.emptyList();
         }
 
-        List<EventGhettoData> result = new ArrayList<>(300);
+        List<SchemaEvent> result = new ArrayList<>(300);
         int index = 0;
         int dateIndex = 0;
 
@@ -120,7 +52,7 @@ public class TixHandler
             index++;
 //            logger.info(event.getName() + " " + event.getCategories() + "\n\t" + event.getSubTitle() + " " + event.getDescription()) ;
 
-            List<EventGhettoData> eventList = event.toDataList();
+            List<SchemaEvent> eventList = event.toDataList();
             if (eventList.isEmpty())
             {
                 continue;

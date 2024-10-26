@@ -1,14 +1,15 @@
 package com.mobilitus.attractionscmd.tix;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.log4j.Logger;
+
 import com.mobilitus.attractionscmd.tix.data.TixEvent;
 import com.mobilitus.attractionscmd.tix.data.TixEventList;
 import com.mobilitus.util.hexia.Pair;
 import com.mobilitus.util.hexia.StrUtil;
 import com.mobilitus.util.httputil.HTTPUtil;
-import org.apache.log4j.Logger;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * @author helgaw
@@ -19,11 +20,12 @@ public class TixAPI
 {
     private static final Logger logger = Logger.getLogger(TixAPI.class);
 
-    private String api = null;
+    private String api = "https://api.tix.is/Events/38540f0ce9924958";
 
 
     public TixAPI()
     {
+
     }
 
     public TixAPI(String source)
