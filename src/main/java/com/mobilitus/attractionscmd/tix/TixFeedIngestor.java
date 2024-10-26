@@ -1,20 +1,5 @@
 package com.mobilitus.attractionscmd.tix;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.apache.log4j.Logger;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
-
 import com.mobilitus.util.data.attractions.AttractionType;
 import com.mobilitus.util.data.aws.kinesis.KinesisStream;
 import com.mobilitus.util.data.pusher.MessageType;
@@ -29,7 +14,21 @@ import com.mobilitus.util.distributed.dynamodb.AWSUtils;
 import com.mobilitus.util.hexia.StrUtil;
 import com.mobilitus.util.hexia.location.CountryCode;
 import com.mobilitus.util.hexia.location.LocationUtil;
+import org.apache.log4j.Logger;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author helgaw
@@ -46,6 +45,9 @@ public class TixFeedIngestor
     Map<String, SchemaLocation> venues = new HashMap<>(100);
     Map<String, SchemaArtist> artists = new HashMap<>(100);
 
+    // feed info for tix
+    //  	https://api.tix.is/Events/<partnerid>
+    //      partner id is 	38540f0ce9924958
 
     public TixFeedIngestor()
     {
