@@ -1,4 +1,4 @@
-package com.mobilitus.attractionscmd.festivals.icelandairwaves;
+package com.mobilitus.attractionscmd.tix;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,18 +36,18 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
  * @todo add class description.
  * @since 4/5/20 17:55
  */
-public class AirwavesScraper
+public class TixFeedIngestor
 {
     private  SchemaArtist airwaves;
 
     private Producer toCreator;
 
-    private static Logger logger = Logger.getLogger(AirwavesScraper.class);
+    private static Logger logger = Logger.getLogger(TixFeedIngestor.class);
     Map<String, SchemaLocation> venues = new HashMap<>(100);
     Map<String, SchemaArtist> artists = new HashMap<>(100);
 
 
-    public AirwavesScraper()
+    public TixFeedIngestor()
     {
         AwsCredentialsProvider credentialsProvider = AWSUtils.getCredentialsProvider();
 
