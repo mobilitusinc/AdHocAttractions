@@ -6,9 +6,9 @@ import com.mobilitus.gogo.attractions.EventWorker;
 import com.mobilitus.gogo.search.AttractionSearch;
 import com.mobilitus.gogo.search.EventSearch;
 import com.mobilitus.persisted.attractions.RemoteTypesPersisted;
+import com.mobilitus.util.cache.MemcachedAdministrator;
 import com.mobilitus.util.distributed.aws.cloudsearch.DefaultSearchConfig;
 import com.mobilitus.util.distributed.aws.cloudsearch.SearchConfig;
-import com.mobilitus.util.distributed.aws.memcached.ElastiCacheAdministrator;
 import com.mobilitus.util.distributed.dynamodb.AWSUtils;
 import com.mobilitus.util.hexia.StrUtil;
 import org.apache.log4j.Logger;
@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class RemoteTypeList
 {
-    private static ElastiCacheAdministrator cacheAdministrator = null;
+    private static MemcachedAdministrator cacheAdministrator = null;
     private final AwsCredentialsProvider credentials;
     private final DynamoDbEnhancedAsyncClient mapper;
     private static final Logger logger = Logger.getLogger(RemoteTypeList.class);
@@ -48,7 +48,7 @@ public class RemoteTypeList
         if (cacheAdministrator == null)
         {
             Cache.create(credentials.resolveCredentials(), memcache);
-            cacheAdministrator = new ElastiCacheAdministrator();
+            cacheAdministrator = new MemcachedAdministrator();
         }
         mapper = AWSUtils.getMapper(credentials);
 

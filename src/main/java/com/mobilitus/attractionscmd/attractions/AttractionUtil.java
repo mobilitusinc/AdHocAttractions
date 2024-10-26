@@ -16,7 +16,7 @@ import com.mobilitus.util.data.gogo.SourceListingData;
 import com.mobilitus.util.data.tabula.reportdata.SortOrder;
 import com.mobilitus.util.distributed.aws.cloudsearch.DefaultSearchConfig;
 import com.mobilitus.util.distributed.aws.cloudsearch.SearchConfig;
-import com.mobilitus.util.distributed.aws.memcached.ElastiCacheAdministrator;
+import com.mobilitus.util.cache.MemcachedAdministrator;
 import com.mobilitus.util.distributed.dynamodb.AWSUtils;
 import com.mobilitus.util.hexia.location.Point;
 import com.mobilitus.util.hexia.pagination.Page;
@@ -34,7 +34,7 @@ import java.util.List;
  */
 public class AttractionUtil
 {
-    private static ElastiCacheAdministrator cacheAdministrator = null;
+    private static MemcachedAdministrator cacheAdministrator = null;
     private final AwsCredentialsProvider credentials;
     private final DynamoDbEnhancedAsyncClient mapper;
     private static final Logger logger = Logger.getLogger(AttractionUtil.class);
@@ -51,7 +51,7 @@ public class AttractionUtil
         if (cacheAdministrator == null)
         {
             Cache.create(credentials.resolveCredentials(), memcache);
-            cacheAdministrator = new ElastiCacheAdministrator();
+            cacheAdministrator = new MemcachedAdministrator();
         }
         mapper = AWSUtils.getMapper(credentials);
 

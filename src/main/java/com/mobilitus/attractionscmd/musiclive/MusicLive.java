@@ -13,7 +13,8 @@ import com.mobilitus.util.data.gogo.SearchAttractionFilter;
 import com.mobilitus.util.data.schema.SchemaEvent;
 import com.mobilitus.util.distributed.aws.cloudsearch.DefaultSearchConfig;
 import com.mobilitus.util.distributed.aws.cloudsearch.SearchConfig;
-import com.mobilitus.util.distributed.aws.memcached.ElastiCacheAdministrator;
+import com.mobilitus.util.cache.MemcachedAdministrator;
+
 import com.mobilitus.util.distributed.dynamodb.AWSUtils;
 import com.mobilitus.util.hexia.KeyValue;
 import com.mobilitus.util.hexia.Pair;
@@ -41,7 +42,7 @@ import java.util.Locale;
  */
 public class MusicLive
 {
-    private static ElastiCacheAdministrator cacheAdministrator = null;
+    private static MemcachedAdministrator cacheAdministrator = null;
     private final AwsCredentialsProvider credentials;
     private final DynamoDbEnhancedAsyncClient mapper;
     private static final Logger logger = Logger.getLogger(MusicLive.class);
@@ -58,7 +59,7 @@ public class MusicLive
         if (cacheAdministrator == null)
         {
             Cache.create(credentials.resolveCredentials(), memcache);
-            cacheAdministrator = new ElastiCacheAdministrator();
+            cacheAdministrator = new MemcachedAdministrator();
         }
         mapper = AWSUtils.getMapper(credentials);
 
@@ -68,7 +69,7 @@ public class MusicLive
 
         gogoSearch = new AttractionSearch(searchConfig.getCredentialsProvider(), searchConfig.getArtistSearchURL());
 
-        eventWorker = new EventWorker(null, null, mapper, AWSUtils.getS3(), searchConfig);
+        eventWorker = new EventWorker( mapper, AWSUtils.getS3(), searchConfig);
         artistWorker = new ArtistWorker(null, null, mapper, AWSUtils.getS3(), searchConfig);
     }
 

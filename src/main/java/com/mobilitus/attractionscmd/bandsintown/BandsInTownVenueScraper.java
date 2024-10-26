@@ -23,7 +23,7 @@ public class BandsInTownVenueScraper extends BaseDocument
 //    private Producer toAttractionWorker;
 //    private Logger logger = Logger.getLogger(BandsInTownVenueScraper.class);
 //
-//    private static ElastiCacheAdministrator cacheAdministrator = null;
+//    private static MemcachedAdministrator cacheAdministrator = null;
 //
 //    static
 //    {

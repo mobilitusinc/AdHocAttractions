@@ -32,7 +32,8 @@ import com.mobilitus.util.data.gogo.SearchFilter;
 import com.mobilitus.util.data.tabula.reportdata.SortOrder;
 import com.mobilitus.util.distributed.aws.cloudsearch.DefaultSearchConfig;
 import com.mobilitus.util.distributed.aws.cloudsearch.SearchConfig;
-import com.mobilitus.util.distributed.aws.memcached.ElastiCacheAdministrator;
+import com.mobilitus.util.cache.MemcachedAdministrator;
+
 import com.mobilitus.util.distributed.aws.s3.S3;
 import com.mobilitus.util.distributed.dynamodb.AWSUtils;
 import com.mobilitus.util.hexia.ID;
@@ -75,7 +76,7 @@ public class PrepareCountry
     private Map<String, String> artistMap = new HashMap<>(60000);
     private BandsInTownWorker bandsInTownWorker;
 
-    private static ElastiCacheAdministrator cacheAdministrator;
+    private static MemcachedAdministrator cacheAdministrator;
 //    private BandsInTownScraper bandsInTown = new BandsInTownScraper();
 //    private SongkickScraper songKick = new SongkickScraper();
 
@@ -99,7 +100,7 @@ public class PrepareCountry
         artistWorker = new ArtistWorker(null, null, mapper, AWSUtils.getS3(), searchConfig);
         venueWorker = new VenueWorker(id, new FaceData(), mapper, s3, searchConfig);
 
-        cacheAdministrator = new ElastiCacheAdministrator();
+        cacheAdministrator = new MemcachedAdministrator();
         bandsInTownWorker = new BandsInTownWorker (scrapingbeeApiKey);
         spotify = new Spotify();
 

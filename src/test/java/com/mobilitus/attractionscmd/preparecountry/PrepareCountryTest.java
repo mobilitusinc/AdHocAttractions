@@ -45,7 +45,7 @@ class PrepareCountryTest
     {
         // start 3679 upcoming events in Norway
         // 4532 events in eod
-        // 4493
+        // 4776
         List<GogoEventSearchData> events = toTest.getEvents(country);
         int i = 0;
         for (GogoEventSearchData event : events)

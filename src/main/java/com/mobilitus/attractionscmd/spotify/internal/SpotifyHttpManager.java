@@ -13,6 +13,11 @@ import com.mobilitus.attractionscmd.spotify.internal.exceptions.detailed.NotFoun
 import com.mobilitus.attractionscmd.spotify.internal.exceptions.detailed.ServiceUnavailableException;
 import com.mobilitus.attractionscmd.spotify.internal.exceptions.detailed.TooManyRequestsException;
 import com.mobilitus.attractionscmd.spotify.internal.exceptions.detailed.UnauthorizedException;
+import org.apache.hc.client5.http.cache.CacheResponseStatus;
+import org.apache.hc.client5.http.cache.HttpCacheContext;
+import org.apache.hc.client5.http.impl.cache.CacheConfig;
+import org.apache.hc.client5.http.impl.cache.CachingHttpClients;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
@@ -22,8 +27,6 @@ import org.apache.http.StatusLine;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
-import org.apache.http.client.cache.CacheResponseStatus;
-import org.apache.http.client.cache.HttpCacheContext;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpGet;
@@ -32,9 +35,6 @@ import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.config.ConnectionConfig;
 import org.apache.http.impl.client.BasicCredentialsProvider;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.cache.CacheConfig;
-import org.apache.http.impl.client.cache.CachingHttpClients;
 import org.apache.http.util.EntityUtils;
 
 import java.io.IOException;
@@ -86,7 +86,6 @@ public class SpotifyHttpManager implements IHttpManager
                                                     .setCharset(Charset.forName("UTF-8"))
                                                     .build();
 
-        new BasicCredentialsProvider();
         CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
         if (proxy != null)
         {
@@ -111,13 +110,25 @@ public class SpotifyHttpManager implements IHttpManager
                                                                 : RequestConfig.DEFAULT.getSocketTimeout())
                                               .build();
 
-        this.httpClient = CachingHttpClients
-                                  .custom()
-                                  .setCacheConfig(cacheConfig)
-                                  .setDefaultConnectionConfig(connectionConfig)
-                                  .setDefaultCredentialsProvider(credentialsProvider)
-                                  .setDefaultRequestConfig(requestConfig)
-                                  .build();
+                this.httpClient = CachingHttpClients
+                                          .custom()
+                                          .setCacheConfig(cacheConfig)
+                                          .setDefaultCredentialsProvider((org.apache.hc.client5.http.auth.CredentialsProvider) credentialsProvider)
+//                                          .setDefaultRequestConfig(requestConfig)
+                                          .build();
+
+        //                                                  .setDefaultConnectionConfig(connectionConfig)
+//                                          .setDefaultCredentialsProvider(credentialsProvider)
+//                                          .setDefaultRequestConfig(requestConfig)
+//                                          .build();
+
+        //        this.httpClient = CachingHttpClients
+//                                  .custom()
+//                                  .setCacheConfig(cacheConfig)
+//                                          .setDefaultConnectionConfig(connectionConfig)
+//                                  .setDefaultCredentialsProvider(credentialsProvider)
+//                                  .setDefaultRequestConfig(requestConfig)
+//                                  .build();
     }
 
 
@@ -271,7 +282,7 @@ public class SpotifyHttpManager implements IHttpManager
                                                          IOException
     {
         HttpCacheContext context = HttpCacheContext.create();
-        HttpResponse response = httpClient.execute(method, context);
+        HttpResponse response = null; // httpClient.execute(method, context);
 
         try
         {

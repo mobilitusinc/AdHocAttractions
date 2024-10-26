@@ -5,15 +5,14 @@ import com.mobilitus.gogo.attractions.EventWorker;
 import com.mobilitus.gogo.search.AttractionSearch;
 import com.mobilitus.gogo.search.EventSearch;
 import com.mobilitus.persisted.imports.EventImportQueuePersisted;
-import com.mobilitus.persisted.imports.ImportProcessPersisted;
 import com.mobilitus.persisted.utils.EntryStatus;
+import com.mobilitus.util.cache.MemcachedAdministrator;
 import com.mobilitus.util.data.attractions.DataSource;
 import com.mobilitus.util.data.gogo.PromoGhettoData;
-import com.mobilitus.util.data.schema.SchemaEvent;
 import com.mobilitus.util.data.ticketMaster.EventGhettoData;
 import com.mobilitus.util.distributed.aws.cloudsearch.DefaultSearchConfig;
 import com.mobilitus.util.distributed.aws.cloudsearch.SearchConfig;
-import com.mobilitus.util.distributed.aws.memcached.ElastiCacheAdministrator;
+import com.mobilitus.util.distributed.aws.s3.S3;
 import com.mobilitus.util.distributed.dynamodb.AWSUtils;
 import com.mobilitus.util.hexia.StrUtil;
 import com.mobilitus.util.hexia.location.CountryCode;
@@ -42,13 +41,14 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class QueueUtils
 {
-    private static ElastiCacheAdministrator cacheAdministrator = null;
+    private static MemcachedAdministrator cacheAdministrator = null;
     private final AwsCredentialsProvider credentials;
     private final DynamoDbEnhancedAsyncClient mapper;
     private static final Logger logger = Logger.getLogger(com.mobilitus.attractionscmd.attractions.AttractionUtil.class);
     private final AttractionSearch gogoSearch;
     private final EventWorker eventWorker;
     private final EventSearch eventSearch;
+    private final S3 s3;
 
     AtomicReference<Integer> count = new AtomicReference<>(0);
 
@@ -60,10 +60,10 @@ public class QueueUtils
         if (cacheAdministrator == null)
         {
             Cache.create(credentials.resolveCredentials(), memcache);
-            cacheAdministrator = new ElastiCacheAdministrator();
+            cacheAdministrator = new MemcachedAdministrator();
         }
         mapper = AWSUtils.getMapper(credentials);
-
+        s3 = AWSUtils.getS3();
         SearchConfig searchConfig = new DefaultSearchConfig(credentials);
 
         eventSearch = new EventSearch(searchConfig.getCredentialsProvider(), searchConfig.getEventSearchURL());
@@ -73,110 +73,84 @@ public class QueueUtils
         eventWorker = new EventWorker(null, null, mapper, AWSUtils.getS3(), searchConfig);
     }
 
-    public Integer updateStaleInSchemaWorker()
-    {
-        SdkPublisher<ImportProcessPersisted> all = ImportProcessPersisted.findAll(mapper);
-
-        AtomicReference<Integer> reProcess = new AtomicReference<>(0);
-        AtomicReference<Integer> deleted = new AtomicReference<>(0);
-        AtomicReference<Integer> allentries = new AtomicReference<>(0);
-        AtomicReference<Integer> stale = new AtomicReference<>(0);
-
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        all.subscribe(new Subscriber<>()
-        {
-
-            @Override
-            public void onSubscribe(Subscription s)
-            {
-                s.request(50000);
-            }
-
-            @Override public void onNext(ImportProcessPersisted importProcess)
-            {
-                if (importProcess == null)
-                {
-                    return;
-                }
-                //                 results.add(eventImportQueuePersisted);
-//                Integer duplicates = removeDuplicates(importProcess);
-
-//                if (duplicates > 0)
-//                {
-//                    logger.info (reProcess.get() + "/" + count.get() +"/" + allentries.get() + " found  " + duplicates.intValue() + " of " + importProcess.toString());
-//                    reProcess.set(reProcess.get() + 1);
-//                    deleted.set(deleted.get() + duplicates);
-//                }
-//                else
-//                {
-                    if (!importProcess.isDone())
-                    {
-                        SchemaEvent event =importProcess.getSchemaEvent();
-                        if (importProcess.getCreated().plusMinutes(5).isAfter(ZonedDateTime.now()))
-                        {
-                            return;
-                        }
-
-                        if (event.getStartDate().isAfterNow())
-                        {
-                            logger.info(reProcess.get() + "/" + count.get() + "  nudging " +  event.getName() + " a:" + importProcess.artistStatus() + " v:" + importProcess.venueStatus() +
-                                        " e:" + importProcess.eventStatus() + " " + getAgeStr(Duration.between(importProcess.getUpdated(), ZonedDateTime.now())));
-                            if (importProcess.isArtistDone() && importProcess.isVenueDone())
-                            {
-                                importProcess.setEventStatus(EntryStatus.pending.value());
-                                importProcess.setUpdated(ZonedDateTime.now());
-                                ImportProcessPersisted.getTable(mapper).putItem(importProcess);
-                                reProcess.set(reProcess.get() + 1);
-                            }
-                        }
-                    }
-//                }
-//                allentries.set(allentries.get() + 1 + duplicates);
-                count.set(count.get() + 1);
-            }
-
-
-            @Override
-            public void onError(Throwable t)
-            {
-                logger.error("Error getting items", t);
-                future.completeExceptionally(t);
-            }
-
-            @Override
-            public void onComplete()
-            {
-                System.out.println("Fixed duplicates removed " + deleted.get()  + " of " + count.get());
-                System.out.println("Kicked  " + stale.get()  + " entries " );
-                future.complete(null);
-            }
-        });
-        try
-        {
-            future.get(); // This will block until the operation is complete
-        }
-        catch (InterruptedException e)
-        {
-            /**
-             * @todo improve error handling
-             *
-             **/
-            logger.error(StrUtil.stack2String(e));
-
-        }
-        catch (ExecutionException e)
-        {
-            /**
-             * @todo improve error handling
-             *
-             **/
-            logger.error(StrUtil.stack2String(e));
-
-        }
-
-        return count.get();
-
-    }
+//    public Integer storeSchemaEventsInS3()
+//    {
+////        SdkPublisher<ImportProcessPersisted> all = ImportProcessPersisted.findAll(mapper);
+////
+////        AtomicReference<Integer> reProcess = new AtomicReference<>(0);
+////        AtomicReference<Integer> deleted = new AtomicReference<>(0);
+////        AtomicReference<Integer> allentries = new AtomicReference<>(0);
+////        AtomicReference<Integer> stale = new AtomicReference<>(0);
+////
+////        CompletableFuture<Void> future = new CompletableFuture<>();
+////        all.subscribe(new Subscriber<>()
+////        {
+////
+////            @Override
+////            public void onSubscribe(Subscription s)
+////            {
+////                s.request(50000);
+////            }
+////
+////            @Override public void onNext(ImportProcessPersisted importProcess)
+////            {
+////                if (importProcess == null)
+////                {
+////                    return;
+////                }
+////
+////                SchemaEvent event =importProcess.getSchemaEvent();
+////                String date = importProcess.getCreated().toString().substring(0, 10);
+////                logger.info(reProcess.get() + "/" + count.get() + "  storing json " +  event.getName());
+////                s3.store("promogogo-schema/"+ date + "/facebook/" + event.getId() + ".json", event.toJson());
+////                //                        S3.saveEvent(event);
+////
+////                //                allentries.set(allentries.get() + 1 + duplicates);
+////                count.set(count.get() + 1);
+////            }
+////
+////
+////            @Override
+////            public void onError(Throwable t)
+////            {
+////                logger.error("Error getting items", t);
+////                future.completeExceptionally(t);
+////            }
+////
+////            @Override
+////            public void onComplete()
+////            {
+////                System.out.println("Fixed duplicates removed " + deleted.get()  + " of " + count.get());
+////                System.out.println("Kicked  " + stale.get()  + " entries " );
+////                future.complete(null);
+////            }
+////        });
+////        try
+////        {
+////            future.get(); // This will block until the operation is complete
+////        }
+////        catch (InterruptedException e)
+////        {
+////            /**
+////             * @todo improve error handling
+////             *
+////             **/
+////            logger.error(StrUtil.stack2String(e));
+////
+////        }
+////        catch (ExecutionException e)
+////        {
+////            /**
+////             * @todo improve error handling
+////             *
+////             **/
+////            logger.error(StrUtil.stack2String(e));
+////
+////        }
+////
+////        return count.get();
+//
+//    }
 
 //    private Integer removeDuplicates(ImportProcessPersisted importProcess)
 //    {
@@ -228,6 +202,7 @@ public class QueueUtils
                 //                 results.add(eventImportQueuePersisted);
 //                logger.info (  count.get() + " looking at  " + eventImportQueuePersisted.toString());
 
+                count.set(count.get() + 1);
                 if (existing.containsKey(eventImportQueuePersisted.getUrl()))
                 {
                     logger.info (  " deleting dupliates " + eventImportQueuePersisted.toString());
@@ -238,75 +213,13 @@ public class QueueUtils
                 {
                     existing.put(eventImportQueuePersisted.getId(), eventImportQueuePersisted.getId());
                 }
-                if (eventImportQueuePersisted.status() == EntryStatus.failed)
+                if (eventImportQueuePersisted.status() != EntryStatus.success)
                 {
                     logger.info (reProcess.get() + "/" + count.get() + " " + eventImportQueuePersisted.toString());
                     reProcess.set(reProcess.get() + 1);
                     reImport(eventImportQueuePersisted);
-                    return;
 
                 }
-                else if (eventImportQueuePersisted.getCreated().plusDays(7).isBefore(ZonedDateTime.now()))
-                {
-                    count.set(count.get() + 1);
-
-                    return;
-                }
-                if (eventImportQueuePersisted.getUpdated().plusMinutes(5).isAfter(ZonedDateTime.now()))
-                {
-                    // somebody is working on this
-                    count.set(count.get() + 1);
-
-                    return;
-                }
-                Boolean done = false;
-
-                EventGhettoData event = getEvent(eventImportQueuePersisted);
-                if (event == null ||  event.getVenue() == null || event.getArtists().isEmpty())
-                {
-//                    logger.info (reProcess.get() + "/" + count.get() + " " + eventImportQueuePersisted.toString());
-//                    reProcess.set(reProcess.get() + 1);
-//                    reImport(eventImportQueuePersisted);
-                }
-                else if (event != null)
-                {
-                    if (!eventImportQueuePersisted.isDone())
-                    {
-//                        if (event.getShowTime().isBeforeNow())
-                        {
-                            logger.info(doneCount.get() + "/" + count.get() + "done with " +  " " + eventImportQueuePersisted.toString());
-                            doneCount.set(doneCount.get() + 1);
-                            eventImportQueuePersisted.setStatus(EntryStatus.success);
-                            EventImportQueuePersisted.getTable(mapper).putItem(eventImportQueuePersisted);
-                            done = true;
-                        }
-//                        else if (eventImportQueuePersisted.getUpdated().plusMinutes(60).isBefore(ZonedDateTime.now()))
-//                        {
-//                            Duration updateAge = Duration.between(eventImportQueuePersisted.getCreated(), ZonedDateTime.now());
-//
-//                            logger.info(reProcess.get() + "/" + count.get() + " pending  " + getAgeStr(updateAge) +  " " + eventImportQueuePersisted.toString());
-//                            reProcess.set(reProcess.get() + 1);
-//                            reImport(eventImportQueuePersisted);
-//                        }
-                    }
-                    else
-                    {
-                        done = true;
-                    }
-                }
-                //                pending.add(eventImportQueuePersisted);
-//                Boolean bOK = handleQueueEntry(eventImportQueuePersisted);
-//                if (bOK)
-//                {
-//                    logger.info (reProcess.get() + "/" + count.get() + " " + eventImportQueuePersisted.toString());
-//                    reProcess.set(reProcess.get() + 1);
-//                }
-                if (!done)
-                {
-                    logger.info(reProcess.get() + "/" + count.get() + " not done with " +  " " + eventImportQueuePersisted.toString());
-                    reProcess.set(reProcess.get() + 1);
-                }
-                count.set(count.get() + 1);
             }
 
 

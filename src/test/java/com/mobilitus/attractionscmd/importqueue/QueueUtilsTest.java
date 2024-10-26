@@ -142,31 +142,4 @@ class QueueUtilsTest
     }
 
 
-    @Test
-    void cleanImportProcess()
-    {
-
-        Logger.getRootLogger().setLevel(Level.INFO);
-        AwsCredentialsProvider credentialsProvider = AWSUtils.getCredentialsProvider();
-
-        Cache.create(credentialsProvider.resolveCredentials(), "localhost:11211");
-
-        QueueUtils queueUtils = new QueueUtils(credentialsProvider, "localhost:11211");
-        queueUtils.updateStaleInSchemaWorker();
-        try
-        {
-            Thread.sleep(1000000);
-        }
-        catch (InterruptedException e)
-        {
-            /**
-             * @todo improve error handling
-             *
-             **/
-
-
-        }
-    }
-
-
 }

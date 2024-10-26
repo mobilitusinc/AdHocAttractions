@@ -5,6 +5,7 @@ import com.mobilitus.gogo.attractions.VenueWorker;
 import com.mobilitus.gogo.search.AttractionSearch;
 import com.mobilitus.gogo.search.EventSearch;
 import com.mobilitus.persisted.attractions.venues.VenuePersisted;
+import com.mobilitus.util.cache.MemcachedAdministrator;
 import com.mobilitus.util.data.attractions.VenueData;
 import com.mobilitus.util.data.aws.cloudsearch.GogoSearchData;
 import com.mobilitus.util.data.face.FaceData;
@@ -13,7 +14,6 @@ import com.mobilitus.util.data.gogo.SearchAttractionFilter;
 import com.mobilitus.util.data.tabula.reportdata.SortOrder;
 import com.mobilitus.util.distributed.aws.cloudsearch.DefaultSearchConfig;
 import com.mobilitus.util.distributed.aws.cloudsearch.SearchConfig;
-import com.mobilitus.util.distributed.aws.memcached.ElastiCacheAdministrator;
 import com.mobilitus.util.distributed.dynamodb.AWSUtils;
 import com.mobilitus.util.distributed.mapbox.MapBoxHandler;
 import com.mobilitus.util.hexia.ID;
@@ -39,7 +39,8 @@ public class VenueFixer
     private final AttractionSearch gogoSearch;
     private final ID id;
     private final VenueWorker venueWorker;
-    private final ElastiCacheAdministrator cacheAdministrator;
+    private final MemcachedAdministrator cacheAdministrator;
+    //    private final MemcachedAdministrator cacheAdministrator;
     private Logger logger = Logger.getLogger(VenueFixer.class);
 
     public VenueFixer()
@@ -60,7 +61,7 @@ public class VenueFixer
 
         venueWorker = new VenueWorker(id, new FaceData(), mapper, AWSUtils.getS3(), searchConfig);
 
-        cacheAdministrator = new ElastiCacheAdministrator();
+        cacheAdministrator = new MemcachedAdministrator();
 
 
     }
@@ -205,7 +206,7 @@ public class VenueFixer
     private boolean inIceland(Point locationPoint)
     {
         // all of iceland and nothing else is within this radius
-        Point centerIce = new Point ("64.5846131263839, -18.722521957340597");
+        Point centerIce = new Point("64.5846131263839, -18.722521957340597");
         double distance = 350;
         if (locationPoint != null && locationPoint.isValid())
         {

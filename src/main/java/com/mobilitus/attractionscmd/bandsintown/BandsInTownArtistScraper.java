@@ -15,7 +15,8 @@ import com.mobilitus.util.data.schema.SchemaArtist;
 import com.mobilitus.util.distributed.aws.cloudsearch.DefaultSearchConfig;
 import com.mobilitus.util.distributed.aws.cloudsearch.SearchConfig;
 import com.mobilitus.util.distributed.aws.kinesis.Producer;
-import com.mobilitus.util.distributed.aws.memcached.ElastiCacheAdministrator;
+import com.mobilitus.util.cache.MemcachedAdministrator;
+
 import com.mobilitus.util.distributed.aws.s3.S3;
 import com.mobilitus.util.distributed.dynamodb.AWSUtils;
 import com.mobilitus.util.hexia.ID;
@@ -51,7 +52,7 @@ public class BandsInTownArtistScraper extends BaseDocument
     private Producer toAttractionWorker;
     private Logger logger = Logger.getLogger(BandsInTownArtistScraper.class);
 
-    private static ElastiCacheAdministrator cacheAdministrator = null;
+    private static MemcachedAdministrator cacheAdministrator = null;
 
     private String artistRoot = "https://www.bandsintown.com/a/";
 
@@ -77,7 +78,7 @@ public class BandsInTownArtistScraper extends BaseDocument
         artistWorker = new ArtistWorker(id, new FaceData(), mapper, s3, searchConfig);
         eventWorker = new EventWorker(id, new FaceData(), mapper, s3, searchConfig);
 
-        cacheAdministrator = new ElastiCacheAdministrator();
+        cacheAdministrator = new MemcachedAdministrator();
     }
 
     public BandsInTownArtistScraper(String scrapingbeeApiKey)
@@ -178,7 +179,7 @@ public class BandsInTownArtistScraper extends BaseDocument
 
     static
     {
-        cacheAdministrator =  Cache.getCache();
+//        cacheAdministrator =  Cache.getCache();
     }
 
 }
