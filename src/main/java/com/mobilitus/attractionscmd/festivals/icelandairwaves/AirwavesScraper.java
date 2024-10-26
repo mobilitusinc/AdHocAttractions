@@ -1,20 +1,5 @@
 package com.mobilitus.attractionscmd.festivals.icelandairwaves;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.apache.log4j.Logger;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
-
 import com.mobilitus.util.data.attractions.AttractionType;
 import com.mobilitus.util.data.aws.kinesis.KinesisStream;
 import com.mobilitus.util.data.pusher.MessageType;
@@ -29,7 +14,21 @@ import com.mobilitus.util.distributed.dynamodb.AWSUtils;
 import com.mobilitus.util.hexia.StrUtil;
 import com.mobilitus.util.hexia.location.CountryCode;
 import com.mobilitus.util.hexia.location.LocationUtil;
+import org.apache.log4j.Logger;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author helgaw
@@ -51,6 +50,7 @@ public class AirwavesScraper
     {
         AwsCredentialsProvider credentialsProvider = AWSUtils.getCredentialsProvider();
 
+        // cache maps to reuse artists / venues
         Map<String, SchemaLocation> venues = createVenueMap();
         Map<String, SchemaArtist> artists = createArtistMap();
 
@@ -58,7 +58,7 @@ public class AirwavesScraper
         toCreator = new Producer(KinesisStream.dev, credentialsProvider);
 
         // for prod
-        //toCreator = new Producer(KinesisStream.toSchema, credentialsProvider);
+//        toCreator = new Producer(KinesisStream.toSchema, credentialsProvider);
 
     }
 
@@ -111,7 +111,7 @@ public class AirwavesScraper
 
         SchemaLocation kolaport = new SchemaLocation();
         kolaport.setId("kolaport");
-        kolaport.setName("Kolaport");
+        kolaport.setName("Kolaportið");
         kolaport.setStreetAddress("Tryggvagata 19");
         kolaport.setPostalCode("101");
         kolaport.setAddressLocality("Reykjavik");
@@ -179,10 +179,11 @@ public class AirwavesScraper
     {
         Integer index = 0;
         Integer total = 0;
-        String[] urls = { "https://icelandairwaves.is/schedule-thursday/",
-                           "https://icelandairwaves.is/schedule-friday/",
-                           "https://icelandairwaves.is/schedule-saturday/"
-                        };
+        String[] urls = {
+                        "https://icelandairwaves.is/schedule-thursday/",
+                        "https://icelandairwaves.is/schedule-friday/",
+                        "https://icelandairwaves.is/schedule-saturday/"
+        };
 
         DateTime dayOf = new DateTime(2024, 11, 7, 0, 0, 0);
         for (String url : urls)
@@ -209,7 +210,16 @@ public class AirwavesScraper
             }
             dayOf = dayOf.plusDays(1);
         }
-        toCreator.flush();
+
+        try
+        {
+            toCreator.flush();
+        }
+        catch (Exception e)
+        {
+            logger.error(StrUtil.stack2String(e));
+
+        }
     }
 
     private List<SchemaEvent> parsePage(Document document, DateTime dayOf)
